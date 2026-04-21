@@ -8,7 +8,7 @@ USER appuser
 
 ENV MPLBACKEND=Agg
 COPY --chown=appuser:appuser services/visualization/ /app/services/visualization/
-EXPOSE 6005
+EXPOSE 7005
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:6005/health').raise_for_status()"
-CMD ["uvicorn", "services.visualization.app:app", "--host", "0.0.0.0", "--port", "6005"]
+    CMD python -c "import httpx; httpx.get('http://localhost:7005/health').raise_for_status()"
+CMD ["uvicorn", "services.visualization.app:app", "--host", "0.0.0.0", "--port", "7005"]

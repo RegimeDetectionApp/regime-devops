@@ -79,11 +79,11 @@ export MPLBACKEND=Agg
 export PYTHONPATH="$ROOT_DIR"
 
 SERVICES=(
-    "market_data:6001"
-    "feature_engine:6002"
-    "detection_core:6003"
-    "backtesting:6004"
-    "visualization:6005"
+    "market_data:7001"
+    "feature_engine:7002"
+    "detection_core:7003"
+    "backtesting:7004"
+    "visualization:7005"
 )
 
 for entry in "${SERVICES[@]}"; do
@@ -100,28 +100,28 @@ done
 # Gateway last (depends on others)
 sleep 1
 
-export MARKET_DATA_URL="http://localhost:6001"
-export FEATURE_ENGINE_URL="http://localhost:6002"
-export DETECTION_CORE_URL="http://localhost:6003"
-export BACKTESTING_URL="http://localhost:6004"
-export VISUALIZATION_URL="http://localhost:6005"
+export MARKET_DATA_URL="http://localhost:7001"
+export FEATURE_ENGINE_URL="http://localhost:7002"
+export DETECTION_CORE_URL="http://localhost:7003"
+export BACKTESTING_URL="http://localhost:7004"
+export VISUALIZATION_URL="http://localhost:7005"
 
 uvicorn "gateway.app:app" \
-    --host 0.0.0.0 --port 6000 \
+    --host 0.0.0.0 --port 7000 \
     --log-level info \
     > "$LOG_DIR/gateway.log" 2>&1 &
 echo $! > "$PID_DIR/gateway.pid"
-printf "  %-20s → port %s  (pid %s)\n" "gateway" "6000" "$!"
+printf "  %-20s → port %s  (pid %s)\n" "gateway" "7000" "$!"
 
 echo ""
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
-echo "  Gateway:        http://localhost:6000"
-echo "  Market Data:    http://localhost:6001"
-echo "  Feature Engine: http://localhost:6002"
-echo "  Detection Core: http://localhost:6003"
-echo "  Backtesting:    http://localhost:6004"
-echo "  Visualization:  http://localhost:6005"
+echo "  Gateway:        http://localhost:7000"
+echo "  Market Data:    http://localhost:7001"
+echo "  Feature Engine: http://localhost:7002"
+echo "  Detection Core: http://localhost:7003"
+echo "  Backtesting:    http://localhost:7004"
+echo "  Visualization:  http://localhost:7005"
 echo ""
 echo "  Logs:   .logs/<service>.log"
 echo "  Stop:   make down"

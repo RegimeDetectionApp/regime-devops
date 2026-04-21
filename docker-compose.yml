@@ -21,12 +21,12 @@ services:
       context: .
       dockerfile: docker/market-data/Dockerfile
     ports:
-      - "6001:6001"
+      - "7001:7001"
     environment:
       - SERVICE_NAME=market-data
       - LOG_LEVEL=info
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:6001/health').raise_for_status()"]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:7001/health').raise_for_status()"]
 
   # ── Feature Engine Service ────────────────────────────────────────
   feature-engine:
@@ -35,12 +35,12 @@ services:
       context: .
       dockerfile: docker/feature-engine/Dockerfile
     ports:
-      - "6002:6002"
+      - "7002:7002"
     environment:
       - SERVICE_NAME=feature-engine
       - LOG_LEVEL=info
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:6002/health').raise_for_status()"]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:7002/health').raise_for_status()"]
 
   # ── Detection Core Service ────────────────────────────────────────
   detection-core:
@@ -49,12 +49,12 @@ services:
       context: .
       dockerfile: docker/detection-core/Dockerfile
     ports:
-      - "6003:6003"
+      - "7003:7003"
     environment:
       - SERVICE_NAME=detection-core
       - LOG_LEVEL=info
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:6003/health').raise_for_status()"]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:7003/health').raise_for_status()"]
     deploy:
       resources:
         limits:
@@ -67,12 +67,12 @@ services:
       context: .
       dockerfile: docker/backtesting/Dockerfile
     ports:
-      - "6004:6004"
+      - "7004:7004"
     environment:
       - SERVICE_NAME=backtesting
       - LOG_LEVEL=info
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:6004/health').raise_for_status()"]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:7004/health').raise_for_status()"]
 
   # ── Visualization Service ─────────────────────────────────────────
   visualization:
@@ -81,13 +81,13 @@ services:
       context: .
       dockerfile: docker/visualization/Dockerfile
     ports:
-      - "6005:6005"
+      - "7005:7005"
     environment:
       - SERVICE_NAME=visualization
       - MPLBACKEND=Agg
       - LOG_LEVEL=info
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:6005/health').raise_for_status()"]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:7005/health').raise_for_status()"]
 
   # ── API Gateway ───────────────────────────────────────────────────
   gateway:
@@ -96,15 +96,15 @@ services:
       context: .
       dockerfile: docker/gateway/Dockerfile
     ports:
-      - "6000:6000"
+      - "7000:7000"
     environment:
       - SERVICE_NAME=gateway
       - LOG_LEVEL=info
-      - MARKET_DATA_URL=http://market-data:6001
-      - FEATURE_ENGINE_URL=http://feature-engine:6002
-      - DETECTION_CORE_URL=http://detection-core:6003
-      - BACKTESTING_URL=http://backtesting:6004
-      - VISUALIZATION_URL=http://visualization:6005
+      - MARKET_DATA_URL=http://market-data:7001
+      - FEATURE_ENGINE_URL=http://feature-engine:7002
+      - DETECTION_CORE_URL=http://detection-core:7003
+      - BACKTESTING_URL=http://backtesting:7004
+      - VISUALIZATION_URL=http://visualization:7005
     depends_on:
       market-data:
         condition: service_healthy
@@ -117,7 +117,7 @@ services:
       visualization:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:6000/health').raise_for_status()"]
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:7000/health').raise_for_status()"]
 
 networks:
   regime-net:

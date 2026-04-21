@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Run the full regime detection pipeline against live services
-GATEWAY="http://localhost:6000"
+GATEWAY="http://localhost:7000"
 TICKER="${1:-^GSPC}"
 
 echo ""

@@ -7,7 +7,7 @@ RUN pip install --no-cache-dir hmmlearn>=0.3 \
 USER appuser
 
 COPY --chown=appuser:appuser services/detection_core/ /app/services/detection_core/
-EXPOSE 6003
+EXPOSE 7003
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:6003/health').raise_for_status()"
-CMD ["uvicorn", "services.detection_core.app:app", "--host", "0.0.0.0", "--port", "6003"]
+    CMD python -c "import httpx; httpx.get('http://localhost:7003/health').raise_for_status()"
+CMD ["uvicorn", "services.detection_core.app:app", "--host", "0.0.0.0", "--port", "7003"]

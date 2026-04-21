@@ -1,14 +1,14 @@
 {
   "name": "Regime Detection Platform",
   "image": "mcr.microsoft.com/devcontainers/python:3.12",
-  "forwardPorts": [6000, 6001, 6002, 6003, 6004, 6005],
+  "forwardPorts": [7000, 7001, 7002, 7003, 7004, 7005],
   "portsAttributes": {
-    "6000": { "label": "Gateway API", "onAutoForward": "openBrowser" },
-    "6001": { "label": "Market Data" },
-    "6002": { "label": "Feature Engine" },
-    "6003": { "label": "Detection Core" },
-    "6004": { "label": "Backtesting" },
-    "6005": { "label": "Visualization" }
+    "7000": { "label": "Gateway API", "onAutoForward": "openBrowser" },
+    "7001": { "label": "Market Data" },
+    "7002": { "label": "Feature Engine" },
+    "7003": { "label": "Detection Core" },
+    "7004": { "label": "Backtesting" },
+    "7005": { "label": "Visualization" }
   },
   "postCreateCommand": "bash .devcontainer/setup.sh",
   "postStartCommand": "bash scripts/up.sh",

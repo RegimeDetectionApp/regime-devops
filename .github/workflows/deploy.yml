@@ -42,7 +42,7 @@ jobs:
           echo "Waiting for services to start..."
           sleep 30
 
-          SERVICES=("market-data:6001" "feature-engine:6002" "detection-core:6003" "backtesting:6004" "visualization:6005" "gateway:6000")
+          SERVICES=("market-data:7001" "feature-engine:7002" "detection-core:7003" "backtesting:7004" "visualization:7005" "gateway:7000")
           ALL_OK=true
 
           for entry in "${SERVICES[@]}"; do
@@ -69,7 +69,7 @@ jobs:
       - name: Run detection pipeline (S&P 500)
         run: |
           echo "Running regime detection pipeline via gateway..."
-          RESPONSE=$(curl -sf "http://localhost:6000/api/v1/detect?ticker=^GSPC" || echo "FAILED")
+          RESPONSE=$(curl -sf "http://localhost:7000/api/v1/detect?ticker=^GSPC" || echo "FAILED")
           if [ "$RESPONSE" = "FAILED" ]; then
             echo "Pipeline execution failed"
             docker compose logs gateway --tail=20
@@ -106,8 +106,8 @@ jobs:
           git clone https://github.com/RegimeDetectionApp/regime-devops.git
           cd regime-devops
           docker compose up -d
-          # Gateway: http://localhost:6000
-          # Run pipeline: curl http://localhost:6000/api/v1/detect?ticker=^GSPC
+          # Gateway: http://localhost:7000
+          # Run pipeline: curl http://localhost:7000/api/v1/detect?ticker=^GSPC
           ```
 
           ### Or with native Python (no Docker)
@@ -168,11 +168,11 @@ jobs:
           ## Deployment Summary — AWS EKS
 
           Cluster: regime-cluster (${{ secrets.AWS_REGION }})
-          Gateway: http://${GATEWAY_URL}:6000
+          Gateway: http://${GATEWAY_URL}:7000
 
           ### Verify
           \`\`\`bash
           kubectl get pods -n regime-detection
-          curl http://${GATEWAY_URL}:6000/health
+          curl http://${GATEWAY_URL}:7000/health
           \`\`\`
           EOF

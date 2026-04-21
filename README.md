@@ -34,11 +34,11 @@ No Docker, no image builds, no re-downloads. Dependencies are cached in `.venv/`
 ## Architecture
 
 ```
-Gateway (6000) ─┬─ Market Data    (6001)
-                 ├─ Feature Engine (6002)
-                 ├─ Detection Core (6003)
-                 ├─ Backtesting    (6004)
-                 └─ Visualization  (6005)
+Gateway (7000) ─┬─ Market Data    (7001)
+                 ├─ Feature Engine (7002)
+                 ├─ Detection Core (7003)
+                 ├─ Backtesting    (7004)
+                 └─ Visualization  (7005)
 ```
 
 ## CI/CD Pipelines
