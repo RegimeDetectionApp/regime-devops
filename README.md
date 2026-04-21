@@ -1,11 +1,11 @@
 # Regime Detection — DevOps
 
-CI/CD pipelines and Docker orchestration for the Regime Detection microservices.
+CI/CD pipelines and native Python service orchestration for the Regime Detection microservices.
 
 ## Quick Start
 
 ```bash
-# Start all 6 services locally
+# Start all 6 services locally (no Docker required)
 make up
 
 # Check health
@@ -20,6 +20,16 @@ make run TICKER=^GSPC
 # Stop everything
 make down
 ```
+
+## How It Works
+
+`make up` runs a single script that:
+
+1. **Clones** the [regime-platform](https://github.com/RegimeDetectionApp/regime-platform) gateway + service code (one-time)
+2. **Creates a Python venv** in `.venv/` and installs all dependencies from the org repos (one-time — cached across restarts)
+3. **Starts 6 uvicorn processes** as background jobs with PID tracking in `.pids/` and logs in `.logs/`
+
+No Docker, no image builds, no re-downloads. Dependencies are cached in `.venv/` and persist across restarts.
 
 ## Architecture
 
@@ -43,7 +53,7 @@ Gateway (6000) ─┬─ Market Data    (6001)
 
 | Repo | Purpose |
 |------|---------|
-| **regime-devops** (this) | CI/CD, Docker Compose, operational scripts |
+| **regime-devops** (this) | CI/CD, service orchestration, operational scripts |
 | [regime-platform](https://github.com/RegimeDetectionApp/regime-platform) | FastAPI gateway + service application code |
 | [regime-infra](https://github.com/RegimeDetectionApp/regime-infra) | Terraform (AWS) + Kubernetes manifests |
 | [regime-detection-core](https://github.com/RegimeDetectionApp/regime-detection-core) | Gaussian HMM fitting and regime detection |
@@ -56,8 +66,8 @@ Gateway (6000) ─┬─ Market Data    (6001)
 
 | Script | Description |
 |--------|-------------|
-| `scripts/up.sh` | Build and start all services |
-| `scripts/down.sh` | Stop all services |
+| `scripts/up.sh` | Create venv, install deps, start all services |
+| `scripts/down.sh` | Stop all services by PID |
 | `scripts/health.sh` | Check service health endpoints |
 | `scripts/logs.sh [service]` | Tail logs (all or specific service) |
 | `scripts/run-pipeline.sh [ticker]` | Run detection pipeline via gateway API |

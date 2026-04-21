@@ -1,6 +1,6 @@
-.PHONY: up down health logs build test clean
+.PHONY: up down health logs test run clean
 
-# ── Local Development ──────────────────────────────────────────────
+# ── Local Development (native Python — no Docker) ─────────────────
 up:
 	@bash scripts/up.sh
 
@@ -13,10 +13,6 @@ health:
 logs:
 	@bash scripts/logs.sh $(SERVICE)
 
-build:
-	docker build -t regime-base:latest -f docker/base/Dockerfile .
-	docker compose build
-
 # ── Testing ────────────────────────────────────────────────────────
 test:
 	@echo "Running smoke tests against live services..."
@@ -28,5 +24,5 @@ run:
 
 # ── Cleanup ────────────────────────────────────────────────────────
 clean:
-	docker compose down -v --rmi local
-	rm -rf gateway services run.py
+	@bash scripts/down.sh
+	rm -rf .venv .pids .logs gateway services run.py

@@ -3,6 +3,11 @@ __pycache__/
 .DS_Store
 .env
 
+# Runtime artifacts (created by scripts/up.sh)
+.venv/
+.pids/
+.logs/
+
 # Cloned platform code (fetched by scripts/up.sh)
 gateway/
 services/
