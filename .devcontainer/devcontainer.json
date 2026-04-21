@@ -1,0 +1,27 @@
+{
+  "name": "Regime Detection Platform",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "forwardPorts": [6000, 6001, 6002, 6003, 6004, 6005],
+  "portsAttributes": {
+    "6000": { "label": "Gateway API", "onAutoForward": "openBrowser" },
+    "6001": { "label": "Market Data" },
+    "6002": { "label": "Feature Engine" },
+    "6003": { "label": "Detection Core" },
+    "6004": { "label": "Backtesting" },
+    "6005": { "label": "Visualization" }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "postStartCommand": "bash scripts/up.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "humao.rest-client"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": ".venv/bin/python"
+      }
+    }
+  }
+}

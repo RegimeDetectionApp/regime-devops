@@ -1,0 +1,106 @@
+name: "Run Regime Detection Pipeline"
+
+on:
+  workflow_dispatch:
+    inputs:
+      ticker:
+        description: "Asset ticker symbol"
+        required: true
+        default: "^GSPC"
+        type: choice
+        options:
+          - "^GSPC"
+          - "^IXIC"
+          - "^NSEI"
+          - "GC=F"
+      mode:
+        description: "Analysis mode"
+        required: true
+        default: "standard"
+        type: choice
+        options:
+          - standard
+          - walk-forward
+          - multi-strategy
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-pipeline-v1
+          restore-keys: ${{ runner.os }}-pip-pipeline-
+
+      - name: Clone monolith for standalone execution
+        run: |
+          git clone --depth 1 https://github.com/govid13427742/RegimeDetectionModel.git /tmp/model
+          pip install --upgrade pip
+          pip install -r /tmp/model/requirements.txt
+
+      - name: Run regime detection
+        id: detect
+        working-directory: /tmp/model
+        run: |
+          ARGS="--ticker ${{ inputs.ticker }} --no-show --output-dir /tmp/outputs"
+
+          if [ "${{ inputs.mode }}" = "walk-forward" ]; then
+            ARGS="$ARGS --walk-forward"
+          elif [ "${{ inputs.mode }}" = "multi-strategy" ]; then
+            ARGS="$ARGS --walk-forward --multi-strategy"
+          fi
+
+          echo "Running: python main.py $ARGS"
+          echo ""
+          python main.py $ARGS 2>&1 | tee /tmp/output.log
+
+          # Extract current regime from output
+          REGIME=$(grep "Current Regime:" /tmp/output.log | sed 's/.*Current Regime: *//' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+          STRATEGY=$(grep "Best Strategy:" /tmp/output.log | sed 's/.*Best Strategy: *//' | sed 's/\x1b\[[0-9;]*m//g' | xargs)
+
+          echo "regime=${REGIME:-unknown}" >> $GITHUB_OUTPUT
+          echo "strategy=${STRATEGY:-N/A}" >> $GITHUB_OUTPUT
+
+      - name: Upload output plots
+        uses: actions/upload-artifact@v4
+        with:
+          name: regime-detection-${{ inputs.ticker }}-${{ inputs.mode }}
+          path: /tmp/outputs/*.png
+          retention-days: 7
+
+      - name: Generate summary
+        run: |
+          TICKER="${{ inputs.ticker }}"
+          MODE="${{ inputs.mode }}"
+          REGIME="${{ steps.detect.outputs.regime }}"
+          STRATEGY="${{ steps.detect.outputs.strategy }}"
+
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## Regime Detection Results
+
+          | Parameter | Value |
+          |-----------|-------|
+          | **Ticker** | \`${TICKER}\` |
+          | **Mode** | ${MODE} |
+          | **Current Regime** | ${REGIME} |
+          | **Recommended Strategy** | ${STRATEGY} |
+
+          ### Output
+          \`\`\`
+          $(cat /tmp/output.log | sed 's/\x1b\[[0-9;]*m//g' | tail -40)
+          \`\`\`
+
+          ### Plots
+          Download the **regime-detection-${TICKER}-${MODE}** artifact above for all generated charts.
+          EOF

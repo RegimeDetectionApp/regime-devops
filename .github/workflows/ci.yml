@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-domain-packages:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - { name: regime-market-data, repo: RegimeDetectionApp/regime-market-data }
+          - { name: regime-feature-engine, repo: RegimeDetectionApp/regime-feature-engine }
+          - { name: regime-detection-core, repo: RegimeDetectionApp/regime-detection-core }
+          - { name: regime-backtesting, repo: RegimeDetectionApp/regime-backtesting }
+          - { name: regime-visualization, repo: RegimeDetectionApp/regime-visualization }
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.package.name }}
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Install package
+        run: |
+          pip install --upgrade pip
+          pip install "git+https://github.com/${{ matrix.package.repo }}.git@main"
+
+      - name: Verify import
+        run: |
+          MODULE=$(echo "${{ matrix.package.name }}" | tr '-' '_')
+          python -c "import ${MODULE}; print(f'${{ matrix.package.name }} imported OK')"
+
+  test-platform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-platform
+          restore-keys: ${{ runner.os }}-pip-
+
+      - name: Clone platform code
+        run: git clone --depth 1 https://github.com/RegimeDetectionApp/regime-platform.git /tmp/platform
+
+      - name: Install all dependencies
+        run: |
+          pip install --upgrade pip
+          pip install \
+            "fastapi>=0.104" \
+            "uvicorn[standard]>=0.24" \
+            "httpx>=0.25" \
+            "numpy>=1.24" \
+            "pandas>=2.0" \
+            "scikit-learn>=1.3" \
+            "hmmlearn>=0.3" \
+            "yfinance>=0.2.30" \
+            "matplotlib>=3.7" \
+            "regime-market-data@git+https://github.com/RegimeDetectionApp/regime-market-data.git@main" \
+            "regime-feature-engine@git+https://github.com/RegimeDetectionApp/regime-feature-engine.git@main" \
+            "regime-detection-core@git+https://github.com/RegimeDetectionApp/regime-detection-core.git@main" \
+            "regime-backtesting@git+https://github.com/RegimeDetectionApp/regime-backtesting.git@main" \
+            "regime-visualization@git+https://github.com/RegimeDetectionApp/regime-visualization.git@main"
+
+      - name: Verify all services import
+        run: |
+          export PYTHONPATH="/tmp/platform"
+          python -c "from gateway.app import app; print('Gateway OK')"
+          python -c "from services.market_data.app import app; print('Market Data OK')"
+          python -c "from services.feature_engine.app import app; print('Feature Engine OK')"
+          python -c "from services.detection_core.app import app; print('Detection Core OK')"
+          python -c "from services.backtesting.app import app; print('Backtesting OK')"
+          python -c "from services.visualization.app import app; print('Visualization OK')"

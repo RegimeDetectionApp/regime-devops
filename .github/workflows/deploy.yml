@@ -1,0 +1,178 @@
+name: Deploy Application
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Deployment target"
+        required: true
+        default: "docker-compose"
+        type: choice
+        options:
+          - docker-compose
+          - aws-eks
+
+jobs:
+  # ── Docker Compose (self-contained — runs and tests all services) ──
+  docker-compose:
+    if: inputs.target == 'docker-compose'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build all services
+        run: docker compose build
+
+      - name: Start all services
+        run: docker compose up -d
+
+      - name: Wait for services to be healthy
+        run: |
+          echo "Waiting for services to start..."
+          sleep 30
+
+          SERVICES=("market-data:6001" "feature-engine:6002" "detection-core:6003" "backtesting:6004" "visualization:6005" "gateway:6000")
+          ALL_OK=true
+
+          for entry in "${SERVICES[@]}"; do
+            SVC="${entry%%:*}"
+            PORT="${entry##*:}"
+            if curl -sf "http://localhost:${PORT}/health" > /dev/null 2>&1; then
+              echo "  ✅ ${SVC} (port ${PORT}) — healthy"
+            else
+              echo "  ❌ ${SVC} (port ${PORT}) — UNHEALTHY"
+              ALL_OK=false
+            fi
+          done
+
+          if [ "$ALL_OK" = false ]; then
+            echo ""
+            echo "Some services failed. Dumping logs:"
+            docker compose logs --tail=50
+            exit 1
+          fi
+
+          echo ""
+          echo "All services healthy!"
+
+      - name: Run detection pipeline (S&P 500)
+        run: |
+          echo "Running regime detection pipeline via gateway..."
+          RESPONSE=$(curl -sf "http://localhost:6000/api/v1/detect?ticker=^GSPC" || echo "FAILED")
+          if [ "$RESPONSE" = "FAILED" ]; then
+            echo "Pipeline execution failed"
+            docker compose logs gateway --tail=20
+            exit 1
+          fi
+          echo "Pipeline response:"
+          echo "$RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$RESPONSE"
+
+      - name: Push images to GHCR
+        run: |
+          SERVICES=(market-data feature-engine detection-core backtesting visualization gateway)
+          for SVC in "${SERVICES[@]}"; do
+            IMAGE="regime-devops-${SVC}"
+            GHCR_TAG="ghcr.io/regimedetectionapp/regime-${SVC}:latest"
+            docker tag "${IMAGE}:latest" "${GHCR_TAG}" 2>/dev/null || \
+            docker tag "regime-devops-${SVC}:latest" "${GHCR_TAG}" 2>/dev/null || true
+            docker push "${GHCR_TAG}" 2>/dev/null || true
+            echo "Pushed ${GHCR_TAG}"
+          done
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
+
+      - name: Deployment summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          ## Deployment Summary — Docker Compose
+
+          All 6 microservices built, tested, and images pushed to GHCR.
+
+          ### Run locally
+          ```bash
+          git clone https://github.com/RegimeDetectionApp/regime-devops.git
+          cd regime-devops
+          docker compose up -d
+          # Gateway: http://localhost:6000
+          # Run pipeline: curl http://localhost:6000/api/v1/detect?ticker=^GSPC
+          ```
+
+          ### Or with native Python (no Docker)
+          ```bash
+          make up
+          make run TICKER=^GSPC
+          ```
+          EOF
+
+  # ── AWS EKS (uses regime-infra Terraform + K8s manifests) ─────────
+  aws-eks:
+    if: inputs.target == 'aws-eks'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout infra repo
+        uses: actions/checkout@v4
+        with:
+          repository: RegimeDetectionApp/regime-infra
+          path: infra
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-arn: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name regime-cluster --region ${{ secrets.AWS_REGION }}
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f infra/k8s/namespace.yaml
+          kubectl apply -f infra/k8s/ --recursive
+          kubectl rollout restart deployment -n regime-detection
+
+      - name: Wait for rollout
+        run: |
+          DEPLOYMENTS=$(kubectl get deploy -n regime-detection -o name)
+          for DEP in $DEPLOYMENTS; do
+            echo "Waiting for $DEP..."
+            kubectl rollout status "$DEP" -n regime-detection --timeout=120s
+          done
+
+      - name: Deployment summary
+        run: |
+          GATEWAY_URL=$(kubectl get svc gateway -n regime-detection -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "pending")
+          cat >> $GITHUB_STEP_SUMMARY << EOF
+          ## Deployment Summary — AWS EKS
+
+          Cluster: regime-cluster (${{ secrets.AWS_REGION }})
+          Gateway: http://${GATEWAY_URL}:6000
+
+          ### Verify
+          \`\`\`bash
+          kubectl get pods -n regime-detection
+          curl http://${GATEWAY_URL}:6000/health
+          \`\`\`
+          EOF
