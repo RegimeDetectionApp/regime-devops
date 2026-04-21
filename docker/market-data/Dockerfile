@@ -1,4 +1,4 @@
-FROM regime-base:latest AS base
+FROM ghcr.io/regimedetectionapp/regime-base:latest AS base
 
 USER root
 RUN pip install --no-cache-dir yfinance>=0.2.30 \
