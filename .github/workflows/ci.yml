@@ -1,0 +1,150 @@
+name: CI — Test Domain Packages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-detection-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install detection-core
+        run: |
+          pip install --upgrade pip
+          pip install hmmlearn>=0.3 scikit-learn>=1.3 numpy pandas pytest
+          pip install git+https://github.com/RegimeDetectionApp/regime-detection-core.git@main
+      - name: Test imports and basic fit
+        run: |
+          python -c "
+          from regime_detection_core import fit_hmm, decode_states, label_regimes
+          import pandas as pd, numpy as np
+          np.random.seed(42)
+          X = pd.DataFrame(np.random.randn(200, 7), columns=[f'f{i}' for i in range(7)])
+          model = fit_hmm(X, n_states=3)
+          states = decode_states(model, X)
+          assert len(states) == 200
+          assert model.n_components == 3
+          print('detection-core: OK')
+          "
+
+  test-feature-engine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install feature-engine
+        run: |
+          pip install --upgrade pip
+          pip install numpy pandas scikit-learn pytest
+          pip install git+https://github.com/RegimeDetectionApp/regime-feature-engine.git@main
+      - name: Test feature engineering
+        run: |
+          python -c "
+          from regime_feature_engine import build_features, standardize
+          import pandas as pd, numpy as np
+          np.random.seed(42)
+          n = 100
+          df = pd.DataFrame({
+              'Close': np.cumsum(np.random.randn(n) * 0.01) + 100,
+          }, index=pd.date_range('2020-01-01', periods=n))
+          features = build_features(df)
+          assert set(features.columns) == {'log_return','vol_10d','vol_20d','vol_of_vol','drawdown','skewness_20d','momentum_5d'}
+          scaled, scaler = standardize(features)
+          assert abs(scaled.mean().mean()) < 0.1
+          print('feature-engine: OK — 7 features')
+          "
+
+  test-backtesting:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backtesting
+        run: |
+          pip install --upgrade pip
+          pip install numpy pandas pytest
+          pip install git+https://github.com/RegimeDetectionApp/regime-backtesting.git@main
+      - name: Test backtest pipeline
+        run: |
+          python -c "
+          from regime_backtesting import backtest, performance_summary, regime_allocation
+          import pandas as pd, numpy as np
+          np.random.seed(42)
+          n = 200
+          idx = pd.date_range('2020-01-01', periods=n)
+          regime_df = pd.DataFrame({
+              'prob_crash': np.random.rand(n) * 0.3,
+              'prob_high_vol': np.random.rand(n) * 0.3,
+              'prob_low_vol': 1 - np.random.rand(n) * 0.6,
+          }, index=idx)
+          log_rets = pd.Series(np.random.randn(n) * 0.01, index=idx)
+          bt = backtest(regime_df, log_rets, crash_exposure=0.30, high_vol_exposure=0.60)
+          summary = performance_summary(bt)
+          assert 'Sharpe Ratio' in summary.index
+          assert 'Strategy' in summary.columns
+          print('backtesting: OK — allocation 30%/60%')
+          "
+
+  test-visualization:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install visualization
+        run: |
+          pip install --upgrade pip
+          pip install numpy pandas matplotlib scikit-learn pytest
+          pip install git+https://github.com/RegimeDetectionApp/regime-backtesting.git@main
+          pip install git+https://github.com/RegimeDetectionApp/regime-visualization.git@main
+        env:
+          MPLBACKEND: Agg
+      - name: Test plot generation
+        run: |
+          python -c "
+          import matplotlib
+          matplotlib.use('Agg')
+          from regime_visualization import REGIME_COLOURS, plot_all
+          assert 'Crash' in REGIME_COLOURS
+          assert 'High Volatility' in REGIME_COLOURS
+          assert 'Low Volatility' in REGIME_COLOURS
+          print('visualization: OK — dark theme loaded')
+          "
+        env:
+          MPLBACKEND: Agg
+
+  test-market-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install market-data
+        run: |
+          pip install --upgrade pip
+          pip install numpy pandas yfinance pytest
+          pip install git+https://github.com/RegimeDetectionApp/regime-market-data.git@main
+      - name: Test imports
+        run: |
+          python -c "
+          from regime_market_data import ASSET_UNIVERSE, get_asset_name
+          assert '^GSPC' in ASSET_UNIVERSE
+          assert '^IXIC' in ASSET_UNIVERSE
+          assert '^NSEI' in ASSET_UNIVERSE
+          assert 'GC=F' in ASSET_UNIVERSE
+          assert get_asset_name('^GSPC') == 'S&P 500'
+          print('market-data: OK — 4 assets')
+          "
