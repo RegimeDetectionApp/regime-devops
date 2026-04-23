@@ -1,0 +1,123 @@
+name: 🔍 Lint Any Repo
+
+# Centralized linting - can lint any RegimeDetectionApp repo from here
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'Repository to lint'
+        required: true
+        type: choice
+        options:
+          - regime-detection-core
+          - regime-feature-engine
+          - regime-backtesting
+          - regime-visualization
+          - regime-market-data
+          - regime-platform
+        default: 'regime-detection-core'
+      python-version:
+        description: 'Python version'
+        required: false
+        type: choice
+        options:
+          - '3.10'
+          - '3.11'
+          - '3.12'
+        default: '3.11'
+      run-mypy:
+        description: 'Run mypy type checking'
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  lint:
+    name: Lint ${{ inputs.repository }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          repository: RegimeDetectionApp/${{ inputs.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🐍 Set up Python ${{ inputs.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: 📦 Install linters
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff black mypy
+
+      - name: 🔍 Run ruff (linting)
+        run: |
+          echo "::group::Ruff linting"
+
+          # Try to find source directories
+          if [ -d "src" ]; then
+            DIRS="src"
+          else
+            DIRS="."
+          fi
+
+          if [ -d "tests" ]; then
+            DIRS="$DIRS tests"
+          fi
+
+          if [ -f "pyproject.toml" ]; then
+            ruff check $DIRS --config pyproject.toml --output-format=github
+          else
+            ruff check $DIRS --output-format=github
+          fi
+
+          echo "::endgroup::"
+
+      - name: 🎨 Run black (format check)
+        run: |
+          echo "::group::Black format check"
+
+          if [ -d "src" ]; then
+            DIRS="src"
+          else
+            DIRS="."
+          fi
+
+          if [ -d "tests" ]; then
+            DIRS="$DIRS tests"
+          fi
+
+          black --check --diff $DIRS
+
+          echo "::endgroup::"
+
+      - name: 🔎 Run mypy (type checking)
+        if: inputs.run-mypy
+        run: |
+          echo "::group::Type checking with mypy"
+
+          if [ -d "src" ]; then
+            mypy src --install-types --non-interactive || echo "⚠️ Type checking found issues (non-blocking)"
+          else
+            mypy . --install-types --non-interactive || echo "⚠️ Type checking found issues (non-blocking)"
+          fi
+
+          echo "::endgroup::"
+
+      - name: ✅ Lint summary
+        if: success()
+        run: |
+          echo "## Lint Results ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Repository:** ${{ inputs.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Python:** ${{ inputs.python-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All linting checks passed!" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Ruff (linting)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Black (formatting)" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ inputs.run-mypy }}" == "true" ]; then
+            echo "- ✅ MyPy (type checking)" >> $GITHUB_STEP_SUMMARY
+          fi

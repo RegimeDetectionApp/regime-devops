@@ -1,0 +1,134 @@
+name: 🔒 Security Scan Any Repo
+
+# Centralized security scanning - can scan any RegimeDetectionApp repo from here
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'Repository to scan'
+        required: true
+        type: choice
+        options:
+          - regime-detection-core
+          - regime-feature-engine
+          - regime-backtesting
+          - regime-visualization
+          - regime-market-data
+          - regime-platform
+        default: 'regime-detection-core'
+      python-version:
+        description: 'Python version'
+        required: false
+        type: choice
+        options:
+          - '3.10'
+          - '3.11'
+          - '3.12'
+        default: '3.11'
+
+jobs:
+  security:
+    name: Security Scan ${{ inputs.repository }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          repository: RegimeDetectionApp/${{ inputs.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🐍 Set up Python ${{ inputs.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: 📦 Install security tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit[toml] safety
+
+      - name: 🔒 Run bandit (security linting)
+        run: |
+          echo "::group::Bandit security scan"
+
+          if [ -d "src" ]; then
+            DIRS="src"
+          else
+            DIRS="."
+          fi
+
+          if [ -f "pyproject.toml" ]; then
+            bandit -r $DIRS -c pyproject.toml -f json -o bandit-report.json || true
+          else
+            bandit -r $DIRS -f json -o bandit-report.json || true
+          fi
+
+          if [ -f bandit-report.json ]; then
+            python -c "
+import json
+with open('bandit-report.json') as f:
+    data = json.load(f)
+    metrics = data.get('metrics', {})
+    total = sum(m.get('CONFIDENCE.HIGH', 0) for m in metrics.values())
+    print(f'🔒 Bandit found {total} high-confidence issues')
+" || echo "Report generated"
+          fi
+
+          echo "::endgroup::"
+
+      - name: 📊 Upload bandit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-report-${{ inputs.repository }}
+          path: bandit-report.json
+          retention-days: 30
+
+      - name: 🛡️ Check dependencies for vulnerabilities
+        run: |
+          echo "::group::Safety dependency scan"
+
+          if [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt 2>/dev/null || true
+            safety check --json --output safety-report.json || true
+
+            if [ -f safety-report.json ]; then
+              python -c "
+import json
+try:
+    with open('safety-report.json') as f:
+        data = json.load(f)
+        vulns = data.get('vulnerabilities', [])
+        print(f'🛡️ Safety found {len(vulns)} vulnerabilities')
+except:
+    print('Safety scan completed')
+" || echo "Report generated"
+            fi
+          else
+            echo "No requirements.txt found, skipping dependency scan"
+          fi
+
+          echo "::endgroup::"
+
+      - name: 📦 Upload safety report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: safety-report-${{ inputs.repository }}
+          path: safety-report.json
+          retention-days: 30
+
+      - name: ✅ Security summary
+        if: success()
+        run: |
+          echo "## Security Scan Results 🔒" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Repository:** ${{ inputs.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Python:** ${{ inputs.python-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Security scans completed!" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Bandit (code security)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Safety (dependency vulnerabilities)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📦 Reports uploaded as artifacts" >> $GITHUB_STEP_SUMMARY

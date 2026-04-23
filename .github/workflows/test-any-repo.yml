@@ -1,0 +1,117 @@
+name: 🧪 Test Any Repo
+
+# Centralized test runner - can test any RegimeDetectionApp repo from here
+on:
+  workflow_dispatch:
+    inputs:
+      repository:
+        description: 'Repository to test'
+        required: true
+        type: choice
+        options:
+          - regime-detection-core
+          - regime-feature-engine
+          - regime-backtesting
+          - regime-visualization
+          - regime-market-data
+          - regime-platform
+        default: 'regime-detection-core'
+      test-suite:
+        description: 'Test suite to run'
+        required: false
+        type: choice
+        options:
+          - all
+          - unit
+          - integration
+        default: 'all'
+      python-version:
+        description: 'Python version'
+        required: false
+        type: choice
+        options:
+          - '3.10'
+          - '3.11'
+          - '3.12'
+        default: '3.11'
+      verbose:
+        description: 'Verbose output'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  test:
+    name: Test ${{ inputs.repository }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout target repository
+        uses: actions/checkout@v4
+        with:
+          repository: RegimeDetectionApp/${{ inputs.repository }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🐍 Set up Python ${{ inputs.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: 📦 Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ inputs.python-version }}-${{ hashFiles('**/requirements*.txt', '**/pyproject.toml') }}
+
+      - name: 🔧 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+
+          if [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt
+          fi
+
+          if [ -f "pyproject.toml" ]; then
+            pip install -e ".[dev]" 2>/dev/null || echo "No [dev] extras"
+          fi
+
+          pip install pytest pytest-cov pytest-asyncio pytest-mock
+
+      - name: 🧪 Run tests
+        run: |
+          echo "::group::Running ${{ inputs.test-suite }} tests on ${{ inputs.repository }}"
+
+          PYTEST_ARGS="-v --tb=short --cov --cov-report=xml --cov-report=term-missing"
+
+          if [ "${{ inputs.verbose }}" == "true" ]; then
+            PYTEST_ARGS="-vv --tb=long --cov --cov-report=xml --cov-report=term-missing"
+          fi
+
+          if [ "${{ inputs.test-suite }}" == "unit" ]; then
+            pytest tests/ $PYTEST_ARGS -m "not integration" || pytest $PYTEST_ARGS -m "not integration"
+          elif [ "${{ inputs.test-suite }}" == "integration" ]; then
+            pytest tests/ $PYTEST_ARGS -m "integration" || pytest $PYTEST_ARGS -m "integration"
+          else
+            pytest tests/ $PYTEST_ARGS || pytest $PYTEST_ARGS
+          fi
+
+          echo "::endgroup::"
+
+      - name: 📊 Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-${{ inputs.repository }}-${{ inputs.python-version }}
+          path: coverage.xml
+          retention-days: 30
+
+      - name: ✅ Test summary
+        if: success()
+        run: |
+          echo "## Test Results ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Repository:** ${{ inputs.repository }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Suite:** ${{ inputs.test-suite }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Python:** ${{ inputs.python-version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All tests passed! 🎉" >> $GITHUB_STEP_SUMMARY
