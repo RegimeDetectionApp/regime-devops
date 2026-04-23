@@ -1,0 +1,185 @@
+name: 🧪 CI Pipeline (Reusable Workflows)
+
+# Uses centralized workflows from regime-devops repository
+on:
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - unit
+          - integration
+          - lint-only
+          - security-only
+      python_version:
+        description: 'Python version'
+        required: false
+        default: '3.11'
+        type: choice
+        options:
+          - '3.10'
+          - '3.11'
+          - '3.12'
+      verbose:
+        description: 'Verbose test output'
+        required: false
+        default: false
+        type: boolean
+      build_docker:
+        description: 'Build Docker image'
+        required: false
+        default: false
+        type: boolean
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  # ── Linting ─────────────────────────────────────────────────────────────────
+  lint:
+    name: 🔍 Lint & Format Check
+    if: |
+      inputs.test_suite == 'all' ||
+      inputs.test_suite == 'lint-only' ||
+      github.event_name != 'workflow_dispatch'
+    uses: RegimeDetectionApp/regime-devops/.github/workflows/reusable-lint.yml@main
+    with:
+      python-version: ${{ inputs.python_version || '3.11' }}
+      source-dirs: 'src regime_detection dashboard tests'
+      ruff-config: 'pyproject.toml'
+      run-mypy: true
+
+  # ── Security Scan ───────────────────────────────────────────────────────────
+  security:
+    name: 🔒 Security Scan
+    if: |
+      inputs.test_suite == 'all' ||
+      inputs.test_suite == 'security-only' ||
+      github.event_name != 'workflow_dispatch'
+    uses: RegimeDetectionApp/regime-devops/.github/workflows/reusable-security.yml@main
+    with:
+      python-version: ${{ inputs.python_version || '3.11' }}
+      source-dirs: 'src regime_detection dashboard'
+      requirements-file: 'requirements.txt'
+      bandit-config: 'pyproject.toml'
+
+  # ── Unit & Integration Tests ────────────────────────────────────────────────
+  test:
+    name: 🧪 Tests (Python ${{ matrix.python-version }})
+    if: |
+      inputs.test_suite == 'all' ||
+      inputs.test_suite == 'unit' ||
+      inputs.test_suite == 'integration' ||
+      github.event_name != 'workflow_dispatch'
+    needs: [lint]
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.python_version || '3.11')) || fromJSON('["3.10", "3.11", "3.12"]') }}
+    uses: RegimeDetectionApp/regime-devops/.github/workflows/reusable-python-tests.yml@main
+    with:
+      python-version: ${{ matrix.python-version }}
+      test-suite: ${{ inputs.test_suite == 'lint-only' && 'all' || inputs.test_suite == 'security-only' && 'all' || inputs.test_suite || 'all' }}
+      source-dirs: 'src regime_detection'
+      requirements-file: 'requirements.txt'
+      verbose: ${{ inputs.verbose || false }}
+
+  # ── Integration Validation ──────────────────────────────────────────────────
+  integration:
+    name: 🔗 Integration Validation
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: |
+      (inputs.test_suite == 'all' || inputs.test_suite == 'integration' || github.event_name != 'workflow_dispatch') &&
+      !failure() && !cancelled()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ inputs.python_version || '3.11' }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs.python_version || '3.11' }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-integration-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify module imports
+        run: |
+          python -c "from src.strategies import STRATEGY_REGISTRY; print(f'✓ {len(STRATEGY_REGISTRY)} strategies')"
+          python -c "from src.backtest import multi_strategy_backtest; print('✓ Backtest module')"
+          python -c "from src.model import walk_forward_hmm; print('✓ Model module')"
+          python -c "from dashboard.app import create_app; print('✓ Dashboard module')"
+
+      - name: Run regime detection pipeline
+        run: python main.py --ticker "^GSPC" --no-show --output-dir /tmp/outputs
+
+      - name: Run multi-strategy backtest
+        run: python main.py --ticker "^GSPC" --walk-forward --multi-strategy --no-show --output-dir /tmp/outputs
+
+      - name: Upload integration outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-outputs
+          path: /tmp/outputs/
+
+  # ── Docker Build ────────────────────────────────────────────────────────────
+  docker:
+    name: 🐳 Docker Build
+    needs: [test, security, integration]
+    if: |
+      (inputs.build_docker || (github.event_name == 'push' && github.ref == 'refs/heads/main')) &&
+      !failure() && !cancelled()
+    uses: RegimeDetectionApp/regime-devops/.github/workflows/reusable-docker.yml@main
+    with:
+      image-name: 'regime-detection-model'
+      dockerfile: 'Dockerfile'
+      context: '.'
+      platforms: 'linux/amd64,linux/arm64'
+      push: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+
+  # ── Summary ─────────────────────────────────────────────────────────────────
+  summary:
+    name: 📊 Test Summary
+    runs-on: ubuntu-latest
+    needs: [lint, security, test, integration]
+    if: always()
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## CI Pipeline Results 🧪" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Linting | ${{ needs.lint.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Security | ${{ needs.security.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests | ${{ needs.test.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Integration | ${{ needs.integration.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Suite:** ${{ inputs.test_suite || 'full pipeline' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Python Version:** ${{ inputs.python_version || 'matrix (3.10, 3.11, 3.12)' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Trigger:** ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+
+      - name: Check overall status
+        run: |
+          if [[ "${{ needs.lint.result }}" == "failure" ]] || \
+             [[ "${{ needs.security.result }}" == "failure" ]] || \
+             [[ "${{ needs.test.result }}" == "failure" ]] || \
+             [[ "${{ needs.integration.result }}" == "failure" ]]; then
+            echo "❌ Some jobs failed!"
+            exit 1
+          else
+            echo "✅ All jobs completed successfully!"
+          fi
