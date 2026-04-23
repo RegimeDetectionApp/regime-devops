@@ -1,6 +1,7 @@
 name: Reusable Python Tests
 
 on:
+  # Called by other workflows
   workflow_call:
     inputs:
       python-version:
@@ -35,6 +36,43 @@ on:
       coverage:
         description: 'Coverage percentage'
         value: ${{ jobs.test.outputs.coverage }}
+
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: 'Python version to use'
+        required: false
+        type: choice
+        options:
+          - '3.10'
+          - '3.11'
+          - '3.12'
+        default: '3.11'
+      test-suite:
+        description: 'Test suite to run'
+        required: false
+        type: choice
+        options:
+          - all
+          - unit
+          - integration
+        default: 'all'
+      source-dirs:
+        description: 'Source directories to test (space-separated)'
+        required: false
+        type: string
+        default: 'src tests'
+      requirements-file:
+        description: 'Requirements file path'
+        required: false
+        type: string
+        default: 'requirements.txt'
+      verbose:
+        description: 'Verbose test output'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   test:

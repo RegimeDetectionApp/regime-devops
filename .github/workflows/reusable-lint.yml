@@ -1,12 +1,41 @@
 name: Reusable Linting
 
 on:
+  # Called by other workflows
   workflow_call:
     inputs:
       python-version:
         description: 'Python version to use'
         required: false
         type: string
+        default: '3.11'
+      source-dirs:
+        description: 'Source directories to lint (space-separated)'
+        required: false
+        type: string
+        default: 'src tests'
+      ruff-config:
+        description: 'Path to ruff config file'
+        required: false
+        type: string
+        default: 'pyproject.toml'
+      run-mypy:
+        description: 'Run mypy type checking'
+        required: false
+        type: boolean
+        default: true
+
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: 'Python version to use'
+        required: false
+        type: choice
+        options:
+          - '3.10'
+          - '3.11'
+          - '3.12'
         default: '3.11'
       source-dirs:
         description: 'Source directories to lint (space-separated)'

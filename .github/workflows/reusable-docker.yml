@@ -1,6 +1,7 @@
 name: Reusable Docker Build
 
 on:
+  # Called by other workflows
   workflow_call:
     inputs:
       image-name:
@@ -22,6 +23,44 @@ on:
         required: false
         type: string
         default: 'linux/amd64,linux/arm64'
+      push:
+        description: 'Push image to registry'
+        required: false
+        type: boolean
+        default: false
+      registry:
+        description: 'Container registry'
+        required: false
+        type: string
+        default: 'ghcr.io'
+
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      image-name:
+        description: 'Docker image name (without registry prefix)'
+        required: true
+        type: string
+        default: 'test-image'
+      dockerfile:
+        description: 'Path to Dockerfile'
+        required: false
+        type: string
+        default: 'Dockerfile'
+      context:
+        description: 'Build context directory'
+        required: false
+        type: string
+        default: '.'
+      platforms:
+        description: 'Target platforms'
+        required: false
+        type: choice
+        options:
+          - 'linux/amd64'
+          - 'linux/arm64'
+          - 'linux/amd64,linux/arm64'
+        default: 'linux/amd64'
       push:
         description: 'Push image to registry'
         required: false

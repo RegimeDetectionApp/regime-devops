@@ -1,12 +1,41 @@
 name: Reusable Security Scan
 
 on:
+  # Called by other workflows
   workflow_call:
     inputs:
       python-version:
         description: 'Python version to use'
         required: false
         type: string
+        default: '3.11'
+      source-dirs:
+        description: 'Source directories to scan (space-separated)'
+        required: false
+        type: string
+        default: 'src'
+      requirements-file:
+        description: 'Requirements file for dependency scanning'
+        required: false
+        type: string
+        default: 'requirements.txt'
+      bandit-config:
+        description: 'Path to bandit config'
+        required: false
+        type: string
+        default: 'pyproject.toml'
+
+  # Manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      python-version:
+        description: 'Python version to use'
+        required: false
+        type: choice
+        options:
+          - '3.10'
+          - '3.11'
+          - '3.12'
         default: '3.11'
       source-dirs:
         description: 'Source directories to scan (space-separated)'
